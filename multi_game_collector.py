@@ -32,11 +32,10 @@ import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from kalshi_ws_probability_logger import resolve_market_ticker, run_stream
+from kalshi_ws_probability_logger import resolve_market_ticker
 from kalshi_trade_flow_logger import run_trade_flow_stream
 
 OUTPUT_DIR = Path("data")
-DEFAULT_BUCKET_SECONDS = 15
 
 
 def parse_event_entry(entry: str) -> Tuple[str, Optional[str]]:
@@ -62,28 +61,15 @@ async def collect_one_game(
     duration_seconds: int,
     bucket_seconds: int,
 ) -> None:
-    out_dir = OUTPUT_DIR / market_ticker
-    out_dir.mkdir(parents=True, exist_ok=True)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    trade_flow_path = str(OUTPUT_DIR / f"{market_ticker}.csv")
 
-    trade_flow_path = str(out_dir / "trade_flow.csv")
-    prob_raw_path = str(out_dir / "prob_raw.csv")
-    prob_15s_path = str(out_dir / f"prob_{bucket_seconds}s.csv")
+    print(f"[{market_ticker}] Starting collection -> {trade_flow_path}")
 
-    print(f"[{market_ticker}] Starting collection -> {out_dir}")
-
-    await asyncio.gather(
-        run_trade_flow_stream(
-            market_ticker=market_ticker,
-            duration_seconds=duration_seconds,
-            out_csv_path=trade_flow_path,
-        ),
-        run_stream(
-            market_ticker=market_ticker,
-            duration_seconds=duration_seconds,
-            raw_csv_path=prob_raw_path,
-            bucket_csv_path=prob_15s_path,
-            bucket_seconds=bucket_seconds,
-        ),
+    await run_trade_flow_stream(
+        market_ticker=market_ticker,
+        duration_seconds=duration_seconds,
+        out_csv_path=trade_flow_path,
     )
 
     print(f"[{market_ticker}] Done.")
@@ -92,7 +78,6 @@ async def collect_one_game(
 async def run_all(
     events: List[str],
     duration_seconds: int,
-    bucket_seconds: int,
 ) -> None:
     # Resolve all market tickers upfront so bad inputs fail fast.
     resolved: List[Tuple[str, str]] = []  # (event_ticker, market_ticker)
@@ -110,7 +95,7 @@ async def run_all(
         return
 
     tasks = [
-        collect_one_game(market_ticker, duration_seconds, bucket_seconds)
+        collect_one_game(market_ticker, duration_seconds, 0)
         for _, market_ticker in resolved
     ]
 
@@ -122,6 +107,7 @@ async def run_all(
 
 
 def main() -> None:
+    global OUTPUT_DIR
     parser = argparse.ArgumentParser(
         description="Collect Kalshi trade flow + probability data for multiple games."
     )
@@ -144,31 +130,22 @@ def main() -> None:
         help="Collection duration in seconds per game (default: 7200 = 2 hours)",
     )
     parser.add_argument(
-        "--bucket-seconds",
-        type=int,
-        default=DEFAULT_BUCKET_SECONDS,
-        help=f"Probability bucket size in seconds (default: {DEFAULT_BUCKET_SECONDS})",
-    )
-    parser.add_argument(
         "--out-dir",
         default=str(OUTPUT_DIR),
         help=f"Root output directory (default: {OUTPUT_DIR})",
     )
     args = parser.parse_args()
 
-    global OUTPUT_DIR
     OUTPUT_DIR = Path(args.out_dir)
 
     if args.duration <= 0:
         parser.error("--duration must be > 0")
-    if args.bucket_seconds <= 0:
-        parser.error("--bucket-seconds must be > 0")
 
     events = args.events if args.events else load_events_file(args.events_file)
     if not events:
         parser.error("No events provided.")
 
-    asyncio.run(run_all(events, args.duration, args.bucket_seconds))
+    asyncio.run(run_all(events, args.duration))
 
 
 if __name__ == "__main__":

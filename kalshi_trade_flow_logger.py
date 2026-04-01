@@ -162,6 +162,8 @@ async def run_trade_flow_stream(
                     break
 
                 received_ms = utc_now_ms()
+                if received_ms >= deadline:
+                    break
                 data = json.loads(raw_message)
                 msg_type = str(data.get("type", ""))
                 payload = data.get("msg", {})
