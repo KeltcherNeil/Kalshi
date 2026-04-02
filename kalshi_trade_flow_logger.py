@@ -113,6 +113,8 @@ async def run_trade_flow_stream(
 
     cumulative_bought = 0.0
     cumulative_sold = 0.0
+    current_yes_bid: Optional[float] = None
+    current_yes_ask: Optional[float] = None
     deadline = utc_now_ms() + duration_seconds * 1000
 
     with open(out_csv_path, "w", newline="", encoding="utf-8") as out_file:
@@ -127,6 +129,8 @@ async def run_trade_flow_stream(
                 "quantity",
                 "probability_percent",
                 "probability_source",
+                "yes_bid",
+                "yes_ask",
                 "fee_dollars",
                 "fee_source",
                 "cumulative_bought_qty",
@@ -146,13 +150,11 @@ async def run_trade_flow_stream(
             ping_timeout=20,
             close_timeout=10,
         ) as ws:
-            subscribe_message = {
+            await ws.send(json.dumps({
                 "id": 1,
                 "cmd": "subscribe",
-                # `trade` is public market prints; `fill` is your account's fills (includes fees).
                 "params": {"channels": ["trade", "fill"], "market_tickers": [market_ticker]},
-            }
-            await ws.send(json.dumps(subscribe_message))
+            }))
 
             while utc_now_ms() < deadline:
                 timeout_seconds = max(0.1, (deadline - utc_now_ms()) / 1000.0)
@@ -180,8 +182,12 @@ async def run_trade_flow_stream(
 
                 if side == "buy":
                     cumulative_bought += quantity
+                    if probability_percent is not None:
+                        current_yes_ask = probability_percent
                 elif side == "sell":
                     cumulative_sold += quantity
+                    if probability_percent is not None:
+                        current_yes_bid = probability_percent
 
                 writer.writerow(
                     [
@@ -193,6 +199,8 @@ async def run_trade_flow_stream(
                         f"{quantity:.6f}",
                         "" if probability_percent is None else f"{probability_percent:.4f}",
                         probability_source,
+                        "" if current_yes_bid is None else f"{current_yes_bid:.4f}",
+                        "" if current_yes_ask is None else f"{current_yes_ask:.4f}",
                         "" if fee_dollars is None else f"{fee_dollars:.6f}",
                         fee_source,
                         f"{cumulative_bought:.6f}",

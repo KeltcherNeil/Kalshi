@@ -14,14 +14,11 @@ Output layout:
 
 Event tickers are supplied as  TICKER:TEAM  pairs (team is optional).
 
-Examples:
-    # Two games on the same night
-    python3 multi_game_collector.py \\
-        --events KXNHLGAME-26MAR18NJNYR:NJ KXNHLGAME-26MAR18DALCOL:COL \\
-        --duration 7200
+Examples (always single line):
 
-    # Read tickers from a file, one per line (TICKER or TICKER:TEAM)
-    python3 multi_game_collector.py --events-file tonight.txt --duration 7200
+caffeinate -i python3 multi_game_collector.py --events KXWTAMATCH-26APR02BEJBEN:BEJ KXWTAMATCH-26APR02STEKES:STE --duration 600
+    caffeinate -i python3 multi_game_collector.py --events KXWTAMATCH-26APR02BEJBEN:BEJ KXWTAMATCH-26APR02STEKES:STE --duration 7200
+    caffeinate -i python3 multi_game_collector.py --events-file tonight.txt --duration 7200
 """
 
 from __future__ import annotations
